@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FO3ID 后台管理</title>
+<style>
+  :root {
+    --page: #1a2530; --panel: #223140; --panel-2: #2a3b4c; --line: #34495d;
+    --ink: #e8eef4; --mute: #91a4b6; --gold: #f2c200; --gold-ink: #1a1400;
+    --ep: #5aa91a; --pc: #2563c6; --vip: #b81d24; --res: #2f8f3a; --danger: #d4483e;
+    --radius: 3px;
+    font-family: Bahnschrift, "DIN Alternate", "Arial Narrow", "Segoe UI", sans-serif;
+    font-variant-numeric: tabular-nums;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); font-size: 15px; line-height: 1.45; }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+  /* top bar: the in-game HUD strip */
+  .hud { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 12px 20px;
+         background: #13202b; border-bottom: 2px solid var(--gold); }
+  .hud h1 { margin: 0; font-size: 20px; font-weight: 600; font-stretch: condensed; letter-spacing: .01em; }
+  .hud .who { display: flex; align-items: center; gap: 8px; color: var(--mute); }
+  .badge { display: inline-block; padding: 1px 6px; border-radius: 2px; font-size: 12px; font-weight: 700; color: #fff; }
+  .badge.pc { background: var(--pc); } .badge.vip { background: var(--vip); }
+  .wallet { margin-left: auto; display: flex; align-items: baseline; gap: 8px; }
+  .coin { width: 14px; height: 14px; border-radius: 50%; background: var(--ep); box-shadow: inset 0 0 0 2px #2f6a06; align-self: center; }
+  .wallet strong { font-size: 30px; font-weight: 600; font-stretch: condensed; color: #8fd14f; }
+  .wallet small { color: var(--mute); }
+
+  .shell { display: grid; grid-template-columns: 210px 1fr; min-height: calc(100vh - 62px); }
+  nav { background: #1e2c38; border-right: 1px solid var(--line); padding: 12px 0; }
+  nav button { display: block; width: 100%; text-align: left; padding: 10px 20px; border: 0; background: none;
+               border-left: 3px solid transparent; cursor: pointer; color: var(--mute); }
+  nav button:hover { color: var(--ink); background: #243443; }
+  nav button[aria-selected="true"] { color: var(--ink); border-left-color: var(--gold); background: #263749; }
+  main { padding: 20px 24px 40px; max-width: 1180px; }
+  section[hidden] { display: none; }
+  h2 { margin: 0 0 4px; font-size: 22px; font-weight: 600; font-stretch: condensed; }
+  .lead { margin: 0 0 18px; color: var(--mute); max-width: 72ch; }
+  h3 { margin: 24px 0 8px; font-size: 16px; font-weight: 600; }
+
+  .facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); margin: 0 1px 1px 0; }
+  .facts div { background: var(--panel); padding: 12px 14px; border: 1px solid var(--line); margin: 0 -1px -1px 0; }
+  .facts dt { color: var(--mute); font-size: 13px; }
+  .facts dd { margin: 2px 0 0; font-size: 22px; font-weight: 600; font-stretch: condensed; }
+
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin: 8px 0; }
+  label.f { display: grid; gap: 3px; font-size: 13px; color: var(--mute); }
+  label.check { display: flex; gap: 6px; align-items: center; color: var(--mute); font-size: 14px; }
+  input, select { background: #172330; border: 1px solid var(--line); border-radius: var(--radius); padding: 7px 9px; min-width: 0; }
+  input[type=number] { width: 130px; }
+  input.wide { width: min(360px, 100%); }
+  button.b { border: 1px solid var(--line); background: var(--panel-2); border-radius: var(--radius); padding: 7px 12px; cursor: pointer; }
+  button.b:hover { border-color: var(--mute); }
+  button.b.primary { background: var(--gold); border-color: var(--gold); color: var(--gold-ink); font-weight: 600; }
+  button.b.danger { color: #ffb4ad; border-color: #6b3330; }
+  button.b.small { padding: 3px 8px; font-size: 13px; }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-weight: 500; color: var(--mute); background: #1d2a36; padding: 8px 10px; white-space: nowrap; }
+  td { padding: 6px 10px; border-top: 1px solid var(--line); vertical-align: middle; }
+  tr:hover td { background: #2636454d; }
+  td.num, th.num { text-align: right; }
+  .chip { display: inline-block; min-width: 46px; text-align: center; padding: 1px 6px; border-radius: 2px; font-size: 12px; font-weight: 700; background: #3a4b5c; }
+  .chip.SUB { background: #2d3d4c; color: #c9d6e2; } .chip.RES { background: var(--res); color: #fff; }
+  .chip.t2 { background: #6b5a1a; color: #fbe7a1; }
+  .muted { color: var(--mute); }
+
+  .status { position: sticky; top: 0; z-index: 2; margin: -20px -24px 16px; padding: 8px 24px; min-height: 36px;
+            background: #172430; border-bottom: 1px solid var(--line); color: var(--mute); }
+  .status.ok { color: #9fe06a; } .status.err { color: #ffb4ad; }
+  pre.log { margin: 0; padding: 12px; max-height: 60vh; overflow: auto; font: 12px/1.5 Consolas, "Cascadia Mono", monospace;
+            background: #111b24; border: 1px solid var(--line); border-radius: var(--radius); white-space: pre-wrap; word-break: break-all; }
+
+  @media (max-width: 760px) {
+    .shell { grid-template-columns: 1fr; }
+    nav { display: flex; overflow-x: auto; padding: 0; border-right: 0; border-bottom: 1px solid var(--line); }
+    nav button { width: auto; white-space: nowrap; border-left: 0; border-bottom: 3px solid transparent; padding: 10px 14px; }
+    nav button[aria-selected="true"] { border-bottom-color: var(--gold); }
+    main { padding: 16px; }
+    .status { margin: -16px -16px 12px; padding: 8px 16px; }
+    .wallet { margin-left: 0; }
+  }
+  @media (prefers-reduced-motion: no-preference) { nav button { transition: background .12s, color .12s; } }
+</style>
+</head>
+<body>
+<header class="hud">
+  <h1>FO3ID 后台管理</h1>
+  <span class="who"><span id="coachName">…</span><span class="badge pc">PC</span><span class="badge vip">VIP</span></span>
+  <span class="muted" id="serverTime"></span>
+  <div class="wallet" aria-label="EP 余额"><span class="coin" aria-hidden="true"></span><strong id="epTop">…</strong><small>EP</small></div>
+</header>
+
+<div class="shell">
+  <nav role="tablist" aria-label="后台管理菜单">
+    <button role="tab" data-tab="ringkasan" aria-selected="true">概览</button>
+    <button role="tab" data-tab="pemain">俱乐部球员</button>
+    <button role="tab" data-tab="tambah">添加球员</button>
+    <button role="tab" data-tab="item">礼包与背包</button>
+    <button role="tab" data-tab="harian">每日奖励</button>
+    <button role="tab" data-tab="scout">球探</button>
+    <button role="tab" data-tab="log">服务器日志</button>
+  </nav>
+
+  <main>
+    <div class="status" id="status" role="status" aria-live="polite">改动会立即保存到服务器；游戏里重新进入俱乐部界面后生效。</div>
+
+    <section id="ringkasan">
+      <h2>俱乐部概览</h2>
+      <p class="lead">服务器上这个账号目前的状态。</p>
+      <dl class="facts" id="facts"></dl>
+      <h3>EP 余额</h3>
+      <form class="row" id="epForm">
+        <label class="f">数量<input type="number" id="epValue" min="0" step="1000" required></label>
+        <button class="b primary" data-mode="add">增加 EP</button>
+        <button class="b" data-mode="sub">减少 EP</button>
+        <button class="b" data-mode="set">设为该余额</button>
+      </form>
+    </section>
+
+    <section id="pemain" hidden>
+      <h2>俱乐部球员</h2>
+      <p class="lead">可以修改强化等级、把球员移到替补阵容（供球探交换使用），或移出替补球员。18 人名单（MAIN/SUB）里的球员不能在这里移出。</p>
+      <div class="row"><label class="f">在列表中搜索<input class="wide" id="playerFilter" placeholder="球员姓名"></label></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>角色</th><th>姓名</th><th class="num">赛季</th><th class="num">能力值</th><th>强化等级</th><th class="num">EP 价格</th><th>阵容</th><th></th></tr></thead>
+        <tbody id="playerRows"></tbody>
+      </table></div>
+    </section>
+
+    <section id="tambah" hidden>
+      <h2>添加球员</h2>
+      <p class="lead">在数据库里搜索球员卡（能力值与游戏、fifaaddict 一致），可以直接加入俱乐部，或通过背包发送。</p>
+      <form class="row" id="searchForm">
+        <label class="f">球员姓名<input class="wide" id="searchQ" minlength="2" placeholder="例如：梅西" required></label>
+        <label class="f">强化等级<select id="searchGrade"></select></label>
+        <button class="b primary">搜索</button>
+      </form>
+      <div class="table-wrap"><table>
+        <thead><tr><th>姓名</th><th class="num">赛季</th><th>位置</th><th class="num">能力值</th><th class="num">EP 价格</th><th>转会市场</th><th></th></tr></thead>
+        <tbody id="searchRows"><tr><td colspan="7" class="muted">请输入至少 2 个字符的球员姓名。</td></tr></tbody>
+      </table></div>
+    </section>
+
+    <section id="item" hidden>
+      <h2>球员礼包与背包</h2>
+      <p class="lead">礼包会进入「我的道具 → 球员礼包」。背包礼物会进入「我的道具 → 道具」，用「领取」按钮收取。</p>
+      <h3>把礼包发到我的道具</h3>
+      <form class="row" id="packForm">
+        <label class="f">礼包<select id="packSel"></select></label>
+        <label class="f">数量<input type="number" id="packCount" min="1" max="999" value="1"></label>
+        <button class="b primary">发放礼包</button>
+      </form>
+      <h3>把奖励发送到背包</h3>
+      <form class="row" id="bagForm">
+        <label class="f">标题<input class="wide" id="bagTitle" value="管理员奖励" maxlength="60"></label>
+        <label class="f">EP<input type="number" id="bagEp" min="0" step="1000" value="0"></label>
+        <label class="f">礼包<select id="bagPack"><option value="">不含礼包</option></select></label>
+        <label class="f">礼包数量<input type="number" id="bagCount" min="1" max="999" value="1"></label>
+        <label class="f">球员 spid<input type="number" id="bagSpid" placeholder="可选"></label>
+        <label class="f">强化等级<select id="bagGrade"></select></label>
+        <button class="b primary">发送到背包</button>
+      </form>
+      <h3>商店里的礼包列表</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>礼包</th><th class="num">itemid</th><th class="num">EP 价格</th></tr></thead>
+        <tbody id="packRows"></tbody>
+      </table></div>
+    </section>
+
+    <section id="harian" hidden>
+      <h2>每日登录奖励</h2>
+      <p class="lead">每天（WIB）第一次登录会把当天的奖励发到背包。连续登录会让天数继续累加；中断一天则从第 1 天重新开始。走完最后一天后，循环回到开头。</p>
+      <dl class="facts" id="dailyFacts"></dl>
+      <div class="row">
+        <button class="b" id="dailyGrant">立即发放下一天的奖励</button>
+        <button class="b danger" id="dailyReset">重置连续登录</button>
+      </div>
+      <h3>奖励表</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>天数</th><th>EP</th><th>礼包</th><th>礼包数量</th><th></th></tr></thead>
+        <tbody id="dailyRows"></tbody>
+      </table></div>
+      <div class="row">
+        <button class="b" id="dailyAdd">添加天数</button>
+        <button class="b primary" id="dailySave">保存表格</button>
+      </div>
+    </section>
+
+    <section id="scout" hidden>
+      <h2>球探（球探交换）</h2>
+      <p class="lead">刚使用过的球探会被锁定，直到冷却结束。</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>球探</th><th>状态</th><th>再次可用</th><th>任务</th></tr></thead>
+        <tbody id="scoutRows"></tbody>
+      </table></div>
+      <div class="row"><button class="b primary" id="scoutReset">重置所有球探冷却</button></div>
+    </section>
+
+    <section id="log" hidden>
+      <h2>服务器日志</h2>
+      <p class="lead">captures/http_config.log 的最后若干行。</p>
+      <div class="row">
+        <button class="b" id="logRefresh">重新加载日志</button>
+        <label class="check"><input type="checkbox" id="logAuto"> 每 3 秒自动刷新</label>
+      </div>
+      <pre class="log" id="logBox"></pre>
+    </section>
+  </main>
+</div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const fmt = n => Number(n || 0).toLocaleString("zh-CN");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const SCOUT_NAMES = {default_A01: "业余球探", default_B01: "职业球探", igr: "网吧球探（PC）", vip: "VIP 特别球探"};
+const QUEST_TEXT = {require_value: "球员价值 ≥", require_grade: "强化等级 ≥", require_grade_count: "数量", require_season: "赛季", require_season_count: "数量"};
+let packs = [], packsReady;
+
+async function api(name, body) {
+  const opt = body === undefined ? {} : {method: "POST", headers: {"Content-Type": "application/json", "X-FO3-Admin": "1"}, body: JSON.stringify(body)};
+  const r = await fetch("/api/" + name, opt);
+  const j = await r.json();
+  if (j.error) throw new Error(j.error);
+  return j;
+}
+function say(msg, kind) { const s = $("#status"); s.textContent = msg; s.className = "status " + (kind || ""); }
+async function act(fn, okMsg) {
+  try { await fn(); if (okMsg) say(okMsg, "ok"); await refreshTop(); }
+  catch (e) { say("失败：" + e.message, "err"); }
+}
+const gradeOpts = (val, lo = 1) => Array.from({length: 11 - lo}, (_, i) => i + lo)
+  .map(g => `<option value="${g}"${g == val ? " selected" : ""}>+${g}</option>`).join("");
+const packOpts = val => packs.map(p => `<option value="${p.itemid}"${p.itemid == val ? " selected" : ""}>${esc(p.name)}</option>`).join("");
+const facts = list => list.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join("");
+
+async function refreshTop() {
+  const s = await api("summary");
+  $("#coachName").textContent = `${s.coach.name}，球队 ${s.coach.teamid}`;
+  $("#epTop").textContent = fmt(s.coach.ep);
+  $("#serverTime").textContent = s.server_time;
+  return s;
+}
+
+const loaders = {
+  async ringkasan() {
+    const s = await refreshTop(), d = s.daily;
+    $("#facts").innerHTML = facts([
+      ["俱乐部球员", `${s.players} / ${s.max_players}`],
+      ["我的道具中的礼包", fmt(s.packs)],
+      ["背包中未领取的奖励", fmt(s.bag)],
+      ["连续登录", `${d.streak || 0} 天`],
+      ["今日奖励", d.granted_today ? "已发放" : "等待登录"],
+      ["VIP + 网吧 PC 特权有效至", s.vip_until],
+    ]);
+  },
+  async pemain() {
+    const {players} = await api("players");
+    const q = $("#playerFilter").value.trim().toLowerCase();
+    const rows = players.filter(p => !q || p.name.toLowerCase().includes(q)).sort((a, b) => b.ovr - a.ovr);
+    $("#playerRows").innerHTML = rows.map(p => `<tr>
+      <td><span class="chip ${p.role}">${p.role}</span>${p.team2 ? ' <span class="chip t2">替补</span>' : ""}</td>
+      <td>${esc(p.name)} <span class="muted">${p.spid}</span></td>
+      <td class="num">${p.season}</td><td class="num">${p.ovr}</td>
+      <td><select data-grade="${p.id}" aria-label="强化等级 ${esc(p.name)}">${gradeOpts(p.grade, 0)}</select></td>
+      <td class="num">${fmt(p.price)}</td>
+      <td>${p.role === "RES" ? `<button class="b small" data-team="${p.id}" data-to="${p.team2 ? "first" : "second"}">${p.team2 ? "移至主力阵容" : "移至替补阵容"}</button>` : '<span class="muted">主力阵容</span>'}</td>
+      <td>${p.role === "RES" ? `<button class="b small danger" data-remove="${p.id}" data-name="${esc(p.name)}">移出</button>` : ""}</td>
+    </tr>`).join("") || `<tr><td colspan="8" class="muted">没有符合条件的球员。</td></tr>`;
+  },
+  async tambah() {},
+  async item() {
+    await packsReady;
+    $("#packRows").innerHTML = packs.map(p => `<tr><td>${esc(p.name)}</td><td class="num">${p.itemid}</td><td class="num">${fmt(p.price)}</td></tr>`).join("");
+  },
+  async harian() {
+    await packsReady;
+    const d = await api("daily"), st = d.status;
+    $("#dailyFacts").innerHTML = facts([
+      ["连续登录", `${st.streak || 0} 天`], ["累计登录天数", fmt(st.total)],
+      ["上次领取奖励", st.last || "从未领取"], ["今天（WIB）", d.today],
+    ]);
+    renderDaily(d.table);
+  },
+  async scout() {
+    const s = await api("summary");
+    $("#scoutRows").innerHTML = s.scouts.map(sc => {
+      const q = sc.quest ? Object.entries(sc.quest).map(([k, v]) => `${QUEST_TEXT[k] || k} ${typeof v === "number" ? fmt(v) : v}`).join("，") : "无任务";
+      return `<tr><td>${esc(SCOUT_NAMES[sc.key] || sc.key)}</td><td>${sc.lock ? "已锁定" : "可用"}</td>
+        <td>${sc.cooltime ? new Date(sc.cooltime).toLocaleString("zh-CN") : "现在"}</td><td class="muted">${esc(q)}</td></tr>`;
+    }).join("");
+  },
+  async log() {
+    const {lines} = await api("log?n=150");
+    const box = $("#logBox"); box.textContent = lines.join("\n"); box.scrollTop = box.scrollHeight;
+  },
+};
+
+function renderDaily(table) {
+  $("#dailyRows").innerHTML = table.map((r, i) => `<tr>
+    <td>第 ${i + 1} 天</td>
+    <td><input type="number" min="0" step="1000" value="${r.ep || 0}" data-k="ep" aria-label="第 ${i + 1} 天的 EP"></td>
+    <td><select data-k="pack" aria-label="第 ${i + 1} 天的礼包"><option value="">不含礼包</option>${packOpts(r.pack)}</select></td>
+    <td><input type="number" min="1" max="99" value="${r.count || 1}" data-k="count" aria-label="第 ${i + 1} 天的礼包数量"></td>
+    <td><button class="b small danger" data-drop="${i}">删除该天</button></td>
+  </tr>`).join("");
+}
+function readDaily() {
+  return [...$("#dailyRows").rows].map(tr => {
+    const v = k => tr.querySelector(`[data-k="${k}"]`).value;
+    return {ep: Number(v("ep")) || 0, pack: v("pack") ? Number(v("pack")) : null, count: Number(v("count")) || 1};
+  });
+}
+
+function show(tab) {
+  document.querySelectorAll("nav [role=tab]").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === tab));
+  document.querySelectorAll("main section").forEach(s => s.hidden = s.id !== tab);
+  loaders[tab]().catch(e => say("加载失败：" + e.message, "err"));
+}
+document.querySelectorAll("nav [role=tab]").forEach(b => b.addEventListener("click", () => show(b.dataset.tab)));
+
+$("#epForm").addEventListener("submit", e => e.preventDefault());
+$("#epForm").addEventListener("click", e => {
+  const mode = e.target.dataset.mode; if (!mode) return;
+  e.preventDefault();
+  const raw = $("#epValue").value, n = Number(raw);
+  if (raw === "" || !Number.isFinite(n) || n < 0) return say("请先填写 EP 数量。", "err");
+  const body = mode === "set" ? {set: n} : {add: mode === "sub" ? -n : n};
+  act(async () => { const r = await api("ep", body); await loaders.ringkasan(); say(`当前 EP 余额 ${fmt(r.ep)}。`, "ok"); });
+});
+
+$("#playerFilter").addEventListener("input", () => loaders.pemain());
+$("#playerRows").addEventListener("change", e => {
+  const id = e.target.dataset.grade; if (!id) return;
+  act(async () => { await api("player_grade", {id, grade: Number(e.target.value)}); await loaders.pemain(); }, "强化等级已保存。");
+});
+$("#playerRows").addEventListener("click", e => {
+  const t = e.target;
+  if (t.dataset.team) act(async () => { await api("player_team", {id: t.dataset.team, team: t.dataset.to}); await loaders.pemain(); },
+                          t.dataset.to === "second" ? "球员已移至替补阵容。" : "球员已回到主力阵容。");
+  if (t.dataset.remove && confirm(`确定把 ${t.dataset.name} 移出俱乐部？此操作不可撤销。`))
+    act(async () => { await api("player_remove", {id: t.dataset.remove}); await loaders.pemain(); }, `${t.dataset.name} 已移出俱乐部。`);
+});
+
+$("#searchForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  try {
+    const {rows} = await api("search?q=" + encodeURIComponent($("#searchQ").value.trim()));
+    $("#searchRows").innerHTML = rows.map(r => `<tr>
+      <td>${esc(r.name)} <span class="muted">${r.spid}</span></td><td class="num">${r.season}</td><td>${r.pos}</td>
+      <td class="num">${r.ovr}</td><td class="num">${fmt(r.price)}</td><td>${r.market ? "在售" : '<span class="muted">未在售</span>'}</td>
+      <td><button class="b small primary" data-add="${r.spid}" data-name="${esc(r.name)}">加入俱乐部</button>
+          <button class="b small" data-gift="${r.spid}" data-name="${esc(r.name)}">通过背包发送</button></td>
+    </tr>`).join("") || `<tr><td colspan="7" class="muted">没有找到这个姓名的球员卡。</td></tr>`;
+    say(`找到 ${rows.length} 张球员卡。`, "");
+  } catch (err) { say("搜索失败：" + err.message, "err"); }
+});
+$("#searchRows").addEventListener("click", e => {
+  const t = e.target, grade = Number($("#searchGrade").value);
+  if (t.dataset.add) act(() => api("player_add", {spid: Number(t.dataset.add), grade}), `${t.dataset.name} +${grade} 已加入俱乐部（替补席）。`);
+  if (t.dataset.gift) act(() => api("bag_send", {title: `球员：${t.dataset.name}`, spid: Number(t.dataset.gift), grade}), `${t.dataset.name} +${grade} 已发送到背包。`);
+});
+
+$("#packForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const name = $("#packSel").selectedOptions[0].text, count = Number($("#packCount").value);
+  act(() => api("give_pack", {itemid: Number($("#packSel").value), count}), `${count}× ${name} 已放入我的道具。`);
+});
+$("#bagForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const body = {title: $("#bagTitle").value, ep: Number($("#bagEp").value) || 0, pack: $("#bagPack").value ? Number($("#bagPack").value) : null,
+                count: Number($("#bagCount").value) || 1, spid: $("#bagSpid").value ? Number($("#bagSpid").value) : null, grade: Number($("#bagGrade").value)};
+  act(() => api("bag_send", body), `奖励「${body.title}」已发送到背包。`);
+});
+
+$("#dailyRows").addEventListener("click", e => {
+  const i = e.target.dataset.drop; if (i === undefined) return;
+  const t = readDaily(); t.splice(Number(i), 1); renderDaily(t);
+});
+$("#dailyAdd").addEventListener("click", () => { const t = readDaily(); t.push({ep: 10000}); renderDaily(t); });
+$("#dailySave").addEventListener("click", () => act(async () => { await api("daily_set", {table: readDaily()}); await loaders.harian(); }, "每日奖励表已保存。"));
+$("#dailyGrant").addEventListener("click", () => act(async () => { const r = await api("daily_grant", {}); await loaders.harian(); say(`「${r.title}」已发送到背包。`, "ok"); }));
+$("#dailyReset").addEventListener("click", () => { if (confirm("确定把连续登录天数重置为 0？")) act(async () => { await api("daily_reset", {}); await loaders.harian(); }, "连续登录已重置。"); });
+$("#scoutReset").addEventListener("click", () => act(async () => { await api("scouts_reset", {}); await loaders.scout(); }, "所有球探已恢复可用。"));
+$("#logRefresh").addEventListener("click", () => loaders.log());
+setInterval(() => { if ($("#logAuto").checked && !$("#log").hidden) loaders.log(); }, 3000);
+
+$("#searchGrade").innerHTML = gradeOpts(1); $("#bagGrade").innerHTML = gradeOpts(1);
+packsReady = api("packs").then(j => {
+  packs = j.packs;
+  $("#packSel").innerHTML = packOpts();
+  $("#bagPack").innerHTML = '<option value="">不含礼包</option>' + packOpts();
+}).catch(e => say("加载礼包列表失败：" + e.message, "err"));
+show("ringkasan");
+</script>
+</body>
+</html>
